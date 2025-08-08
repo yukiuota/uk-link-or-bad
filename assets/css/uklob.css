@@ -1,0 +1,84 @@
+/* Minimal styles for buttons */
+.uklob {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+}
+
+.uklob .uklob-btn {
+    border: 1px solid #ccc;
+    background: #fff;
+    padding: .4rem .6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    gap: .4rem;
+    align-items: center;
+}
+
+.uklob .uklob-btn:hover {
+    background: #f7f7f7;
+}
+
+/* 無効時の視覚明確化 */
+.uklob .uklob-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    background: #f2f2f2;
+    border-color: #ddd;
+    color: #888;
+}
+
+/* ラッパーが無効状態のとき（再読込後のCookie判定など） */
+.uklob.uklob-disabled .uklob-btn {
+    background: #f2f2f2;
+    border-color: #ddd;
+    color: #888;
+    cursor: not-allowed;
+    pointer-events: none;
+    /* ホバーやクリックを無効化 */
+    transition: none !important;
+}
+
+/* 無効状態ではホバー効果を適用しない */
+.uklob .uklob-btn:disabled:hover,
+.uklob.uklob-disabled .uklob-btn:hover,
+.uklob .uklob-btn:disabled:focus,
+.uklob.uklob-disabled .uklob-btn:focus {
+    background: #f2f2f2 !important;
+    border-color: #ddd !important;
+    color: #888 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    text-decoration: none !important;
+}
+
+.uklob .uklob-like {
+    border-color: #28a745;
+}
+
+.uklob .uklob-bad {
+    border-color: #dc3545;
+}
+
+.uklob.uklob-disabled {
+    opacity: .85;
+}
+
+/* 投票済みの視覚フック */
+.uklob.uklob-voted .uklob-btn {
+    opacity: .7;
+}
+
+.uklob .uklob-btn.uklob-btn-voted {
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, .04) inset;
+}
+
+.uklob.uklob-voted-like .uklob-like.uklob-btn-voted {
+    border-color: #2ecc71;
+}
+
+.uklob.uklob-voted-bad .uklob-bad.uklob-btn-voted {
+    border-color: #e74c3c;
+}
