@@ -2,7 +2,7 @@
 /**
  * Plugin Name: UK Like or Bad
  * Description: ショートコードで「参考になった / 参考にならなかった」ボタンを表示し、クリック数をカウントします。文言は管理画面で変更可能。Cookieにより一定期間の再投票を抑止。
- * Version: 1.0.0
+ * Version: 1.2.0
  * Author: Y.U.
  * Text Domain: uk-like-or-bad
  */
@@ -37,6 +37,9 @@ class UK_Like_Or_Bad {
     // 一覧カラム（全公開ポストタイプに適用）
     add_action( 'init', [ $this, 'register_admin_columns_for_all' ], 20 );
     add_action( 'pre_get_posts', [ $this, 'admin_handle_sorting' ] );
+    // カウントリセット系
+    add_action( 'admin_post_uklob_reset_counts', [ $this, 'handle_single_reset' ] );
+    add_action( 'admin_notices', [ $this, 'admin_notice_reset' ] );
     }
 
     public function on_activate() {
@@ -44,6 +47,7 @@ class UK_Like_Or_Bad {
             'label_like' => '参考になった',
             'label_bad' => '参考にならなかった',
             'cookie_days' => 7,
+            'thank_you_message' => '投票ありがとうございました',
         ];
         $current = get_option( self::OPTION_KEY );
         if ( ! $current ) {
@@ -58,6 +62,7 @@ class UK_Like_Or_Bad {
             'label_like' => '参考になった',
             'label_bad' => '参考にならなかった',
             'cookie_days' => 7,
+            'thank_you_message' => '投票ありがとうございました',
         ];
         return wp_parse_args( get_option( self::OPTION_KEY, [] ), $defaults );
     }
@@ -74,6 +79,7 @@ class UK_Like_Or_Bad {
             'ajaxUrl' => admin_url( 'admin-ajax.php' ),
             'nonce'   => wp_create_nonce( self::NONCE_ACTION ),
             'cookieDays' => $cookie_days,
+            'thankYouMessage' => $settings['thank_you_message'],
         ] );
     }
 
@@ -131,6 +137,7 @@ class UK_Like_Or_Bad {
                 <span class="uklob-label"><?php echo esc_html( $settings['label_bad'] ); ?></span>
                 <span class="uklob-count" aria-live="polite"><?php echo esc_html( $bad_count ); ?></span>
             </button>
+            <p class="uklob-thanks" aria-live="polite" hidden></p>
         </div>
         <?php
         return ob_get_clean();
@@ -208,14 +215,16 @@ class UK_Like_Or_Bad {
 
         add_settings_field( 'label_like', '「参考になった」ラベル', [ $this, 'field_label_like' ], 'uklob-settings', 'uklob_main' );
         add_settings_field( 'label_bad', '「参考にならなかった」ラベル', [ $this, 'field_label_bad' ], 'uklob-settings', 'uklob_main' );
-        add_settings_field( 'cookie_days', '再投票を禁止する日数', [ $this, 'field_cookie_days' ], 'uklob-settings', 'uklob_main' );
+    add_settings_field( 'cookie_days', '再投票を禁止する日数', [ $this, 'field_cookie_days' ], 'uklob-settings', 'uklob_main' );
+    add_settings_field( 'thank_you_message', '投票後メッセージ', [ $this, 'field_thank_you_message' ], 'uklob-settings', 'uklob_main' );
     }
 
     public function sanitize_settings( $input ) {
         $out = [];
         $out['label_like'] = isset( $input['label_like'] ) ? sanitize_text_field( $input['label_like'] ) : '参考になった';
         $out['label_bad']  = isset( $input['label_bad'] ) ? sanitize_text_field( $input['label_bad'] ) : '参考にならなかった';
-        $out['cookie_days'] = isset( $input['cookie_days'] ) ? max( 1, intval( $input['cookie_days'] ) ) : 7;
+    $out['cookie_days'] = isset( $input['cookie_days'] ) ? max( 1, intval( $input['cookie_days'] ) ) : 7;
+    $out['thank_you_message'] = isset( $input['thank_you_message'] ) ? sanitize_textarea_field( $input['thank_you_message'] ) : '投票ありがとうございました';
         return $out;
     }
 
@@ -232,6 +241,12 @@ class UK_Like_Or_Bad {
     public function field_cookie_days() {
         $v = intval( $this->get_settings()['cookie_days'] );
         echo '<input type="number" min="1" name="' . esc_attr( self::OPTION_KEY ) . '[cookie_days]" value="' . esc_attr( $v ) . '" class="small-text" /> 日';
+    }
+
+    public function field_thank_you_message() {
+        $v = $this->get_settings()['thank_you_message'];
+        echo '<textarea name="' . esc_attr( self::OPTION_KEY ) . '[thank_you_message]" rows="2" class="large-text" placeholder="投票ありがとうございました">' . esc_textarea( $v ) . '</textarea>';
+        echo '<p class="description">ボタン押下後に表示するメッセージ。空にすると表示しません。</p>';
     }
 
     public function render_settings_page() {
@@ -258,6 +273,11 @@ class UK_Like_Or_Bad {
             add_filter( "manage_edit-{$type}_columns", [ $this, 'admin_add_post_columns' ] );
             add_action( "manage_{$type}_posts_custom_column", [ $this, 'admin_render_post_column' ], 10, 2 );
             add_filter( "manage_edit-{$type}_sortable_columns", [ $this, 'admin_sortable_post_columns' ] );
+            // 行アクション
+            add_filter( "{$type}_row_actions", [ $this, 'add_reset_row_action' ], 10, 2 );
+            // 一括アクション
+            add_filter( "bulk_actions-edit-{$type}", [ $this, 'register_bulk_action' ] );
+            add_filter( "handle_bulk_actions-edit-{$type}", [ $this, 'handle_bulk_action' ], 10, 3 );
         }
     }
 
@@ -323,6 +343,90 @@ class UK_Like_Or_Bad {
             $query->set( 'meta_key', '_uklob_bad' );
             $query->set( 'orderby', 'meta_value_num' );
         }
+    }
+
+    /* ==========================
+     * リセット関連
+     * ========================== */
+
+    /**
+     * 行アクション: 個別リセットリンクを追加
+     */
+    public function add_reset_row_action( $actions, $post ) {
+        if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+            return $actions;
+        }
+        $nonce_action = 'uklob_reset_counts_' . $post->ID;
+        $url = wp_nonce_url( admin_url( 'admin-post.php?action=uklob_reset_counts&post=' . $post->ID ), $nonce_action );
+        $actions['uklob_reset'] = '<a href="' . esc_url( $url ) . '" onclick="return confirm(\'カウントをリセットしますか？\');">L/Bリセット</a>';
+        return $actions;
+    }
+
+    /**
+     * 単体リセット処理 (admin-post)
+     */
+    public function handle_single_reset() {
+        if ( ! isset( $_GET['post'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            wp_die( 'Missing post id' );
+        }
+        $post_id = absint( $_GET['post'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( ! $post_id ) {
+            wp_die( 'Invalid post id' );
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_die( 'Permission denied' );
+        }
+        check_admin_referer( 'uklob_reset_counts_' . $post_id );
+        $this->reset_counts_for_post( $post_id );
+        $redirect = add_query_arg( [ 'uklob_reset' => 1, 'reset_count' => 1 ], wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php' ) );
+        wp_safe_redirect( $redirect );
+        exit;
+    }
+
+    /**
+     * 一括アクション登録
+     */
+    public function register_bulk_action( $bulk_actions ) {
+        $bulk_actions['uklob_reset_counts'] = 'UK Like/Bad カウントをリセット';
+        return $bulk_actions;
+    }
+
+    /**
+     * 一括アクション処理
+     */
+    public function handle_bulk_action( $redirect_to, $doaction, $post_ids ) {
+        if ( 'uklob_reset_counts' !== $doaction ) {
+            return $redirect_to;
+        }
+        $count = 0;
+        foreach ( (array) $post_ids as $post_id ) {
+            if ( current_user_can( 'edit_post', $post_id ) ) {
+                $this->reset_counts_for_post( $post_id );
+                $count++;
+            }
+        }
+        $redirect_to = add_query_arg( [ 'uklob_reset' => $count ], $redirect_to );
+        return $redirect_to;
+    }
+
+    /**
+     * 実際のリセット処理
+     */
+    private function reset_counts_for_post( $post_id ) {
+        update_post_meta( $post_id, '_uklob_like', 0 );
+        update_post_meta( $post_id, '_uklob_bad', 0 );
+    }
+
+    /**
+     * 成功メッセージ表示
+     */
+    public function admin_notice_reset() {
+        if ( ! isset( $_GET['uklob_reset'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            return;
+        }
+        $num = intval( $_GET['uklob_reset'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( $num < 1 ) { return; }
+        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( '%d件のカウントをリセットしました。', $num ) ) . '</p></div>';
     }
 }
 

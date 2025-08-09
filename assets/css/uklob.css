@@ -82,3 +82,15 @@
 .uklob.uklob-voted-bad .uklob-bad.uklob-btn-voted {
     border-color: #e74c3c;
 }
+
+/* サンクスメッセージ */
+.uklob .uklob-thanks {
+    margin-left: .5rem;
+    font-size: .9rem;
+    color: #333;
+    opacity: 0;
+    transition: opacity .3s ease;
+}
+.uklob .uklob-thanks-visible {
+    opacity: 1;
+}

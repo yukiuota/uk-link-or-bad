@@ -25,6 +25,13 @@
         $wrap.find('.uklob-bad .uklob-count').text(data.bad);
     }
 
+    function showThankYou($wrap) {
+        if (!UKLOB.thankYouMessage) return;
+        var $el = $wrap.find('.uklob-thanks');
+        if (!$el.length) return;
+        $el.text(UKLOB.thankYouMessage).removeAttr('hidden').addClass('uklob-thanks-visible');
+    }
+
     $(function () {
         $('.uklob').each(function () {
             var $wrap = $(this);
@@ -49,6 +56,7 @@
                     if (res && res.success && res.data) {
                         refreshCounts($wrap, res.data);
                         applyVotedClass($wrap, type);
+                        showThankYou($wrap);
                     } else {
                         updateDisabled($wrap, false);
                     }
